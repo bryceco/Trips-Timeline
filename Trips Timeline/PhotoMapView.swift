@@ -70,25 +70,51 @@ struct PhotoMapView: UIViewRepresentable {
 		func mapView(_ mapView: MKMapView,
 					 viewFor annotation: MKAnnotation) -> MKAnnotationView?
 		{
-			guard !(annotation is MKUserLocation) else { return nil }
+			guard let photo = annotation as? PhotoAnnotation else { return nil }
 
-			let identifier = "PhotoMarker"
-			var view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? MKMarkerAnnotationView
+			let identifier = "PhotoThumb"
+			var view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
 
 			if view == nil {
-				view = MKMarkerAnnotationView(annotation: annotation, reuseIdentifier: identifier)
-				view?.canShowCallout = true
-				view?.markerTintColor = .systemBlue
-				view?.glyphText = "📷"
-
-				// Add a thumbnail button on the right side
-				let button = UIButton(type: .detailDisclosure)
-				view?.rightCalloutAccessoryView = button
+				view = MKAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+				view?.canShowCallout = false   // tap goes directly to preview
 			} else {
 				view?.annotation = annotation
 			}
 
+			// Load thumbnail
+			let options = PHImageRequestOptions()
+			options.deliveryMode = .fastFormat
+			options.resizeMode = .fast
+			options.isSynchronous = false
+
+			let targetSize = CGSize(width: 40, height: 40)
+
+			PHImageManager.default().requestImage(
+				for: PHAsset.fetchAssets(withLocalIdentifiers: [photo.assetIdentifier], options: nil).firstObject!,
+				targetSize: targetSize,
+				contentMode: .aspectFill,
+				options: options
+			) { image, _ in
+				guard let image else { return }
+
+				// Make it circular
+				let renderer = UIGraphicsImageRenderer(size: targetSize)
+				let rounded = renderer.image { ctx in
+					UIBezierPath(ovalIn: CGRect(origin: .zero, size: targetSize)).addClip()
+					image.draw(in: CGRect(origin: .zero, size: targetSize))
+				}
+
+				view?.image = rounded
+				view?.frame.size = targetSize
+			}
+
 			return view
+		}
+
+		func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {
+			guard let annotation = view.annotation as? PhotoAnnotation else { return }
+			parent.onPhotoTapped?(annotation.assetIdentifier)
 		}
 
 		func mapView(_ mapView: MKMapView,

@@ -67,7 +67,7 @@ struct MonthRow: View {
 			HStack(spacing: 8) {
 				Text(monthLabel)
 					.font(.caption)
-					.frame(width: 60, alignment: .leading)
+					.frame(width: 50, alignment: .leading)
 
 				GeometryReader { geo in
 					let totalWidth = geo.size.width
@@ -97,8 +97,9 @@ struct MonthRow: View {
 				}
 				.frame(height: 40)
 			}
-			.padding(.horizontal, 8)
+			.padding(.horizontal, 5)
 			Text(monthText)
+				.font(.caption)
 		}
 	}
 
