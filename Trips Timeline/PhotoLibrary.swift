@@ -9,6 +9,8 @@ import CoreLocation
 import MapKit
 import Photos
 import SwiftReverseGeoCode
+import ImageIO
+import MobileCoreServices
 
 struct Place: Equatable {
 	let city: String
@@ -25,11 +27,93 @@ struct Trip: Identifiable {
 	var photos: [String] = []
 }
 
+extension PHImageManager {
+	struct ImageDataResult {
+		let data: Data
+		let uti: String?
+		let orientation: CGImagePropertyOrientation
+		let info: [AnyHashable: Any]
+	}
+
+	func requestImageDataAndOrientation(for asset: PHAsset,
+										options: PHImageRequestOptions? = nil) async -> ImageDataResult?
+	{
+		await withCheckedContinuation { continuation in
+			let requestID = self.requestImageDataAndOrientation(
+				for: asset,
+				options: options
+			) { data, uti, orientation, info in
+
+				guard let data = data, let info = info else {
+					continuation.resume(returning: nil)
+					return
+				}
+
+				continuation.resume(
+					returning: ImageDataResult(
+						data: data,
+						uti: uti,
+						orientation: orientation,
+						info: info
+					)
+				)
+			}
+
+			// Cancellation support
+			Task {
+				if Task.isCancelled {
+					self.cancelImageRequest(requestID)
+				}
+			}
+		}
+	}
+}
+
+extension PHAsset {
+	func isOriginal() async -> Bool {
+		let options = PHImageRequestOptions()
+		options.isNetworkAccessAllowed = true
+		options.version = .current // not original
+		options.deliveryMode = .highQualityFormat
+		let image = await PHImageManager.default().requestImageDataAndOrientation(for: self, options: options)
+
+		guard
+			let data = image?.data,
+			let source = CGImageSourceCreateWithData(data as CFData, nil),
+			let metadata = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+		else {
+			return false
+		}
+
+		// EXIF and TIFF dictionaries
+		guard
+			let exif = metadata[kCGImagePropertyExifDictionary] as? [CFString: Any],
+			let tiff = metadata[kCGImagePropertyTIFFDictionary] as? [CFString: Any]
+		else {
+			return false
+		}
+
+		// Look for any camera‑related fields
+		let hasCameraInfo =
+			exif[kCGImagePropertyExifFocalLength] != nil ||
+			exif[kCGImagePropertyExifISOSpeedRatings] != nil ||
+			exif[kCGImagePropertyExifExposureTime] != nil ||
+			exif[kCGImagePropertyExifApertureValue] != nil ||
+			exif[kCGImagePropertyExifLensModel] != nil ||
+			tiff[kCGImagePropertyTIFFModel] != nil ||
+			tiff[kCGImagePropertyTIFFMake] != nil
+		if !hasCameraInfo {
+			print("No camera info")
+		}
+		return hasCameraInfo
+	}
+}
+
 class PhotoLibrary {
 
 	static let shared = PhotoLibrary()
 
-	func photoLibraryMetadata() async -> [(date: Date, location: CLLocation, id: String)] {
+	func photoLibraryMetadata() async -> [(date: Date, location: CLLocation, asset: PHAsset)] {
 		let status: PHAuthorizationStatus = await withCheckedContinuation { continuation in
 			PHPhotoLibrary.requestAuthorization { status in
 				continuation.resume(returning: status)
@@ -42,14 +126,17 @@ class PhotoLibrary {
 		}
 
 		let assets = PHAsset.fetchAssets(with: .image, options: nil)
-		var metadata: [(date: Date, location: CLLocation, id: String)] = []
+		var metadata: [(date: Date, location: CLLocation, asset: PHAsset)] = []
 
-		assets.enumerateObjects { asset, _, _ in
-			guard let creationDate = asset.creationDate,
-				  let location = asset.location
-			else { return }
-
-			metadata.append((date: creationDate, location: location, id: asset.localIdentifier))
+		for index in 0..<assets.count {
+			let asset = assets.object(at: index)
+			guard
+				let creationDate = asset.creationDate,
+				let location = asset.location
+			else {
+				continue
+			}
+			metadata.append((date: creationDate, location: location, asset: asset))
 		}
 
 		return metadata
@@ -60,7 +147,13 @@ class PhotoLibrary {
 		for path in resourcePaths {
 			guard let bundle = Bundle(path: path) else { continue }
 			let url = bundle.url(forResource: "geocitydb", withExtension: "sqlite")!
-			return ReverseGeoCodeService(database: url.path)
+			let service: ReverseGeoCodeService
+			do {
+				service = try ReverseGeoCodeService(database: url.path)
+			} catch {
+				fatalError()
+			}
+			return service
 		}
 		fatalError()
 	}()
@@ -87,27 +180,75 @@ class PhotoLibrary {
 		return dateFormatter.string(from: date)
 	}
 
+	let iPhonePhotoDimensions: [(width: Int, height: Int)] = [
+	]
+
 	func allTrips() async -> [Trip] {
 		let metadata = await photoLibraryMetadata().sorted { $0.date < $1.date }
 		var trips: [Trip] = []
-		for entry in metadata {
+
+		let whiteList = [
+			"Canada",
+			"Mexico",
+			"United States",
+			"Puerto Rico",
+			"Dominica",
+			"Grenada",
+			"Bonaire, Saint Eustatius and Saba",
+			"Costa Rica",
+			"United Kingdom",
+			"Spain",
+			"United Arab Emirates",
+			"South Africa",
+			"Zimbabwe",
+			"Japan",
+			"Netherlands",
+			"Italy",
+			"Switzerland",
+			"Belgium",
+			"Taiwan",
+			"Hong Kong",
+			"Tanzania",
+			"Turkey",
+			"Kenya"
+		]
+
+		for index in metadata.indices {
+			let entry = metadata[index]
+			let asset = entry.asset
 			guard let place = await placeName(for: entry.location) else {
 				continue
 			}
+
+			guard
+				whiteList.contains(place.country)
+			else {
+				print("discard \(asset.pixelWidth) x \(asset.pixelHeight) - \(place.country)")
+				continue
+			}
+
+
+			/*
+			if await !asset.isOriginal() {
+				print("Discard \(place.country), \(place.state), \(place.city)")
+				continue
+			}
+			 */
 
 			if let lastTrip = trips.last,
 			   lastTrip.place == place
 			{
 				trips[trips.count - 1].endDate = entry.date
-				trips[trips.count - 1].photos.append(entry.id)
+				trips[trips.count - 1].photos.append(entry.asset.localIdentifier)
 			} else {
 				trips.append(Trip(startDate: entry.date,
 								  endDate: entry.date,
 								  location: entry.location,
 								  place: place,
-								  photos: [entry.id]))
+								  photos: [entry.asset.localIdentifier]))
 			}
 		}
+
 #if false
 		for trip in trips {
 			let d1 = formatDateShort(trip.startDate)
@@ -116,9 +257,16 @@ class PhotoLibrary {
 		}
 #endif
 
-		return trips.filter{
-			$0.place.country != "United States" ||
-			$0.place.state != "Washington"
+		return trips.filter {
+			switch ($0.place.country, $0.place.state) {
+			case ("United States", "Washington"):
+				return false
+			case ("China",_):
+				print($0.place.state)
+				return false
+			default:
+				return true
+			}
 		}
 	}
 }

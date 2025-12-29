@@ -1,5 +1,5 @@
 {
-  "originHash" : "fc8592fe77809237228d5583dd0c05121677ba523e16db3ffcac42165e51c8b6",
+  "originHash" : "bc8571febc8a2ff671c2f5314e9f67305894801383135c7fae1a1dbcf748d458",
   "pins" : [
     {
       "identity" : "sqlite.swift",
@@ -17,15 +17,6 @@
       "state" : {
         "revision" : "b626d3002773b1a1304166643e7f118f724b2132",
         "version" : "1.0.4"
-      }
-    },
-    {
-      "identity" : "swiftreversegeocode",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/hlemai/SwiftReverseGeoCode",
-      "state" : {
-        "revision" : "f97da83977aaa4251dd0f6df07d3f0934da52b82",
-        "version" : "2.0.2"
       }
     }
   ],

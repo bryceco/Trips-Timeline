@@ -7,7 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		02AC92D22EF0DDD700D76218 /* SwiftReverseGeoCode in Frameworks */ = {isa = PBXBuildFile; productRef = 02AC92D12EF0DDD700D76218 /* SwiftReverseGeoCode */; };
+		028366012F024287002B9E34 /* SwiftReverseGeoCode in Frameworks */ = {isa = PBXBuildFile; productRef = 028366002F024287002B9E34 /* SwiftReverseGeoCode */; };
+		028366042F0244B8002B9E34 /* SwiftReverseGeoCode in Frameworks */ = {isa = PBXBuildFile; productRef = 028366032F0244B8002B9E34 /* SwiftReverseGeoCode */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -27,7 +28,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				02AC92D22EF0DDD700D76218 /* SwiftReverseGeoCode in Frameworks */,
+				028366042F0244B8002B9E34 /* SwiftReverseGeoCode in Frameworks */,
+				028366012F024287002B9E34 /* SwiftReverseGeoCode in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -70,7 +72,8 @@
 			);
 			name = "Trips Timeline";
 			packageProductDependencies = (
-				02AC92D12EF0DDD700D76218 /* SwiftReverseGeoCode */,
+				028366002F024287002B9E34 /* SwiftReverseGeoCode */,
+				028366032F0244B8002B9E34 /* SwiftReverseGeoCode */,
 			);
 			productName = "Trips Timeline";
 			productReference = 02AC92C02EF09B4D00D76218 /* Trips Timeline.app */;
@@ -101,7 +104,7 @@
 			mainGroup = 02AC92B72EF09B4D00D76218;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				02AC92D02EF0DDD700D76218 /* XCRemoteSwiftPackageReference "SwiftReverseGeoCode" */,
+				028366022F0244B8002B9E34 /* XCLocalSwiftPackageReference "../SwiftReverseGeoCode" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 02AC92C12EF09B4D00D76218 /* Products */;
@@ -346,21 +349,20 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		02AC92D02EF0DDD700D76218 /* XCRemoteSwiftPackageReference "SwiftReverseGeoCode" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/hlemai/SwiftReverseGeoCode";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.0.2;
-			};
+/* Begin XCLocalSwiftPackageReference section */
+		028366022F0244B8002B9E34 /* XCLocalSwiftPackageReference "../SwiftReverseGeoCode" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../SwiftReverseGeoCode;
 		};
-/* End XCRemoteSwiftPackageReference section */
+/* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		02AC92D12EF0DDD700D76218 /* SwiftReverseGeoCode */ = {
+		028366002F024287002B9E34 /* SwiftReverseGeoCode */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 02AC92D02EF0DDD700D76218 /* XCRemoteSwiftPackageReference "SwiftReverseGeoCode" */;
+			productName = SwiftReverseGeoCode;
+		};
+		028366032F0244B8002B9E34 /* SwiftReverseGeoCode */ = {
+			isa = XCSwiftPackageProductDependency;
 			productName = SwiftReverseGeoCode;
 		};
 /* End XCSwiftPackageProductDependency section */

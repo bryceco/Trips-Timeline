@@ -130,7 +130,12 @@ struct MonthRow: View {
 		else {
 			return nil
 		}
-		return (cityColors[trip.place.city]!, countryColors[trip.place.country]!)
+		let city = cityColors[trip.place.city]!
+		let country = countryColors[trip.place.country]!
+
+		// return (city, country)
+		let _ = city
+		return (country, country)
 	}
 }
 
