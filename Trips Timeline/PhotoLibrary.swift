@@ -27,6 +27,68 @@ struct Trip: Identifiable {
 	var photos: [String] = []
 }
 
+import Photos
+
+func imageName(for asset: PHAsset) -> String?
+{
+	let resources = PHAssetResource.assetResources(for: asset)
+
+	// Prefer the primary photo resource
+	if let primary = resources.first(where: { $0.type == .photo }) {
+		return primary.originalFilename
+	}
+
+	// Fallbacks for edited or alternate representations
+	if let full = resources.first(where: { $0.type == .fullSizePhoto }) {
+		return full.originalFilename
+	}
+
+	if let alt = resources.first(where: { $0.type == .alternatePhoto }) {
+		return alt.originalFilename
+	}
+
+	// Last resort
+	return resources.first?.originalFilename
+}
+
+final class ImageStore: Codable {
+	private var store: [String: Bool]
+
+	private static let filename = "ImageStore.json"
+
+	private static var fileURL: URL {
+		let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+		return docs.appendingPathComponent(filename)
+	}
+
+	init() {
+		// Attempt to load from disk
+		if let data = try? Data(contentsOf: Self.fileURL),
+		   let decoded = try? JSONDecoder().decode(ImageStore.self, from: data) {
+			self.store = decoded.store
+		} else {
+			self.store = [:]
+		}
+	}
+
+	func isValid(asset: PHAsset) -> Bool? {
+		return store[asset.localIdentifier]
+	}
+
+	func add(asset: PHAsset, isValid: Bool) {
+		store[asset.localIdentifier] = isValid
+	}
+
+	func save() {
+		do {
+			let data = try JSONEncoder().encode(self)
+			try data.write(to: Self.fileURL, options: [.atomic])
+		} catch {
+			print("ImageStore.save() failed:", error)
+		}
+	}
+}
+
 extension PHImageManager {
 	struct ImageDataResult {
 		let data: Data
@@ -39,9 +101,8 @@ extension PHImageManager {
 										options: PHImageRequestOptions? = nil) async -> ImageDataResult?
 	{
 		await withCheckedContinuation { continuation in
-			let requestID = self.requestImageDataAndOrientation(
-				for: asset,
-				options: options
+			self.requestImageDataAndOrientation(for: asset,
+												options: options
 			) { data, uti, orientation, info in
 
 				guard let data = data, let info = info else {
@@ -57,13 +118,6 @@ extension PHImageManager {
 						info: info
 					)
 				)
-			}
-
-			// Cancellation support
-			Task {
-				if Task.isCancelled {
-					self.cancelImageRequest(requestID)
-				}
 			}
 		}
 	}
@@ -102,9 +156,6 @@ extension PHAsset {
 			exif[kCGImagePropertyExifLensModel] != nil ||
 			tiff[kCGImagePropertyTIFFModel] != nil ||
 			tiff[kCGImagePropertyTIFFMake] != nil
-		if !hasCameraInfo {
-			print("No camera info")
-		}
 		return hasCameraInfo
 	}
 }
@@ -184,53 +235,84 @@ class PhotoLibrary {
 	]
 
 	func allTrips() async -> [Trip] {
-		let metadata = await photoLibraryMetadata().sorted { $0.date < $1.date }
+		let store = ImageStore()
+		let metadata2 = await photoLibraryMetadata().sorted { $0.date < $1.date }
 		var trips: [Trip] = []
 
+
 		let whiteList = [
-			"Canada",
-			"Mexico",
-			"United States",
-			"Puerto Rico",
-			"Dominica",
-			"Grenada",
-			"Bonaire, Saint Eustatius and Saba",
-			"Costa Rica",
-			"United Kingdom",
-			"Spain",
-			"United Arab Emirates",
-			"South Africa",
-			"Zimbabwe",
-			"Japan",
-			"Netherlands",
-			"Italy",
-			"Switzerland",
+			"Aruba",
 			"Belgium",
-			"Taiwan",
+			"Bonaire, Saint Eustatius and Saba",
+			"Canada",
+			"Costa Rica",
+			"Cyprus",
+			"Dominica",
+			"Germany",
+			"Gibraltar",
+			"Grenada",
+			"Iceland",
+			"Kenya",
 			"Hong Kong",
+			"Italy",
+			"Japan",
+			"Mexico",
+			"Netherlands",
+			"Portugal",
+			"Puerto Rico",
+			"South Africa",
+			"Spain",
+			"Switzerland",
 			"Tanzania",
+			"Taiwan",
 			"Turkey",
-			"Kenya"
+			"United Arab Emirates",
+			"United Kingdom",
+			"United States",
+			"Vatican",
+			"Zimbabwe"
 		]
+
+		var metadata: [(date: Date, location: CLLocation, asset: PHAsset)] = []
+		for index in metadata2.indices {
+			if index % 1000 == 0 {
+				print("\(index)/\(metadata2.count)")
+				store.save()
+			}
+			let entry = metadata2[index]
+			if let valid = store.isValid(asset: entry.asset) {
+				if valid {
+					metadata.append(entry)
+				}
+				continue
+			}
+			let isValid = await entry.asset.isOriginal()
+			store.add(asset: entry.asset, isValid: isValid)
+			if isValid {
+				metadata.append(entry)
+			} else {
+				guard let place = await placeName(for: entry.location) else {
+					continue
+				}
+				print("Discard \(place.country), \(place.state), \(place.city)")
+			}
+		}
+		store.save()
 
 		for index in metadata.indices {
 			let entry = metadata[index]
-			let asset = entry.asset
+
 			guard let place = await placeName(for: entry.location) else {
 				continue
 			}
 
+			/*
 			guard
 				whiteList.contains(place.country)
 			else {
-				print("discard \(asset.pixelWidth) x \(asset.pixelHeight) - \(place.country)")
-				continue
-			}
-
-
-			/*
-			if await !asset.isOriginal() {
-				print("Discard \(place.country), \(place.state), \(place.city)")
+				let name = imageName(for: asset) ?? ""
+				let date = asset.creationDate
+				print("discard \(asset.pixelWidth) x \(asset.pixelHeight) - \(place.country) - \(name) - \(date ?? Date())")
 				continue
 			}
 			 */
