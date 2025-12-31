@@ -5,12 +5,8 @@
 //  Created by Bryce Cogswell on 12/15/25.
 //
 
-import CoreLocation
-import MapKit
 import Photos
 import SwiftReverseGeoCode
-import ImageIO
-import MobileCoreServices
 
 struct Place: Equatable {
 	let city: String
@@ -27,28 +23,24 @@ struct Trip: Identifiable {
 	var photos: [String] = []
 }
 
-import Photos
+func photoName(for asset: PHAsset) async -> String? {
+	await Task.detached { () -> String? in
+		let resources = PHAssetResource.assetResources(for: asset)
 
-func imageName(for asset: PHAsset) -> String?
-{
-	let resources = PHAssetResource.assetResources(for: asset)
+		if let primary = resources.first(where: { $0.type == .photo }) {
+			return primary.originalFilename
+		}
 
-	// Prefer the primary photo resource
-	if let primary = resources.first(where: { $0.type == .photo }) {
-		return primary.originalFilename
-	}
+		if let full = resources.first(where: { $0.type == .fullSizePhoto }) {
+			return full.originalFilename
+		}
 
-	// Fallbacks for edited or alternate representations
-	if let full = resources.first(where: { $0.type == .fullSizePhoto }) {
-		return full.originalFilename
-	}
+		if let alt = resources.first(where: { $0.type == .alternatePhoto }) {
+			return alt.originalFilename
+		}
 
-	if let alt = resources.first(where: { $0.type == .alternatePhoto }) {
-		return alt.originalFilename
-	}
-
-	// Last resort
-	return resources.first?.originalFilename
+		return resources.first?.originalFilename
+	}.value
 }
 
 final class ImageStore: Codable {
@@ -176,7 +168,9 @@ class PhotoLibrary {
 			return []
 		}
 
-		let assets = PHAsset.fetchAssets(with: .image, options: nil)
+		let options = PHFetchOptions()
+		
+		let assets = PHAsset.fetchAssets(with: .image, options: options)
 		var metadata: [(date: Date, location: CLLocation, asset: PHAsset)] = []
 
 		for index in 0..<assets.count {
@@ -236,35 +230,42 @@ class PhotoLibrary {
 
 	func allTrips() async -> [Trip] {
 		let store = ImageStore()
-		let metadata2 = await photoLibraryMetadata().sorted { $0.date < $1.date }
+		let photoListAll = await photoLibraryMetadata().sorted { $0.date < $1.date }
 		var trips: [Trip] = []
-
 
 		let whiteList = [
 			"Aruba",
+			"Austria",
 			"Belgium",
 			"Bonaire, Saint Eustatius and Saba",
 			"Canada",
 			"Costa Rica",
 			"Cyprus",
+			"Czechia",
 			"Dominica",
+			"France",
 			"Germany",
 			"Gibraltar",
 			"Grenada",
-			"Iceland",
-			"Kenya",
 			"Hong Kong",
+			"Hungary",
+			"Iceland",
+			"Ireland",
 			"Italy",
 			"Japan",
+			"Kenya",
+			"Macao",
 			"Mexico",
 			"Netherlands",
 			"Portugal",
 			"Puerto Rico",
+			"Singapore",
 			"South Africa",
 			"Spain",
 			"Switzerland",
 			"Tanzania",
 			"Taiwan",
+			"The Netherlands",
 			"Turkey",
 			"United Arab Emirates",
 			"United Kingdom",
@@ -273,49 +274,53 @@ class PhotoLibrary {
 			"Zimbabwe"
 		]
 
-		var metadata: [(date: Date, location: CLLocation, asset: PHAsset)] = []
-		for index in metadata2.indices {
-			if index % 1000 == 0 {
-				print("\(index)/\(metadata2.count)")
+		var lastDate = Date()
+		var photoListValid: [(date: Date, location: CLLocation, asset: PHAsset)] = []
+		for index in photoListAll.indices {
+			// update progress
+			if Date().timeIntervalSince(lastDate) > 10.0 {
+				print("\(index)/\(photoListAll.count)")
 				store.save()
+				lastDate = lastDate.addingTimeInterval(10.0)
 			}
-			let entry = metadata2[index]
+
+			// check if we already validated the photo
+			let entry = photoListAll[index]
 			if let valid = store.isValid(asset: entry.asset) {
 				if valid {
-					metadata.append(entry)
+					photoListValid.append(entry)
 				}
 				continue
 			}
+
+			// validate the photo
 			let isValid = await entry.asset.isOriginal()
 			store.add(asset: entry.asset, isValid: isValid)
-			if isValid {
-				metadata.append(entry)
-			} else {
-				guard let place = await placeName(for: entry.location) else {
-					continue
+
+			guard isValid else {
+				if let place = await placeName(for: entry.location) {
+					print("Camera info discard: \(place.country), \(place.state), \(place.city)")
 				}
-				print("Discard \(place.country), \(place.state), \(place.city)")
+				continue
 			}
+
+			photoListValid.append(entry)
 		}
 		store.save()
 
-		for index in metadata.indices {
-			let entry = metadata[index]
-
+		for entry in photoListValid {
 			guard let place = await placeName(for: entry.location) else {
 				continue
 			}
 
-			/*
 			guard
 				whiteList.contains(place.country)
 			else {
-				let name = imageName(for: asset) ?? ""
-				let date = asset.creationDate
-				print("discard \(asset.pixelWidth) x \(asset.pixelHeight) - \(place.country) - \(name) - \(date ?? Date())")
+				let name = await photoName(for: entry.asset) ?? ""
+				let date = entry.asset.creationDate
+				print("Not whitelisted: \(entry.asset.pixelWidth) x \(entry.asset.pixelHeight) - \(place.country),\(place.city) - \(name) - \(date ?? Date())")
 				continue
 			}
-			 */
 
 			if let lastTrip = trips.last,
 			   lastTrip.place == place
@@ -352,3 +357,4 @@ class PhotoLibrary {
 		}
 	}
 }
+

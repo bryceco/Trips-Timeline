@@ -7,7 +7,6 @@
 
 import SwiftUI
 import Photos
-import PhotosUI
 
 struct PhotoAssetView: View {
 	var asset: PHAsset
