@@ -12,13 +12,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		02AC92C02EF09B4D00D76218 /* Trips Timeline.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Trips Timeline.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		02AC92C02EF09B4D00D76218 /* TripsTimeline.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TripsTimeline.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		02AC92C22EF09B4D00D76218 /* Trips Timeline */ = {
+		02AC92C22EF09B4D00D76218 /* TripsTimeline */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Trips Timeline";
+			path = TripsTimeline;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -39,7 +39,7 @@
 		02AC92B72EF09B4D00D76218 = {
 			isa = PBXGroup;
 			children = (
-				02AC92C22EF09B4D00D76218 /* Trips Timeline */,
+				02AC92C22EF09B4D00D76218 /* TripsTimeline */,
 				02AC92C12EF09B4D00D76218 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -47,7 +47,7 @@
 		02AC92C12EF09B4D00D76218 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				02AC92C02EF09B4D00D76218 /* Trips Timeline.app */,
+				02AC92C02EF09B4D00D76218 /* TripsTimeline.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -55,9 +55,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		02AC92BF2EF09B4D00D76218 /* Trips Timeline */ = {
+		02AC92BF2EF09B4D00D76218 /* TripsTimeline */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 02AC92CB2EF09B4E00D76218 /* Build configuration list for PBXNativeTarget "Trips Timeline" */;
+			buildConfigurationList = 02AC92CB2EF09B4E00D76218 /* Build configuration list for PBXNativeTarget "TripsTimeline" */;
 			buildPhases = (
 				02AC92BC2EF09B4D00D76218 /* Sources */,
 				02AC92BD2EF09B4D00D76218 /* Frameworks */,
@@ -68,15 +68,15 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				02AC92C22EF09B4D00D76218 /* Trips Timeline */,
+				02AC92C22EF09B4D00D76218 /* TripsTimeline */,
 			);
-			name = "Trips Timeline";
+			name = TripsTimeline;
 			packageProductDependencies = (
 				028366002F024287002B9E34 /* SwiftReverseGeoCode */,
 				028366032F0244B8002B9E34 /* SwiftReverseGeoCode */,
 			);
 			productName = "Trips Timeline";
-			productReference = 02AC92C02EF09B4D00D76218 /* Trips Timeline.app */;
+			productReference = 02AC92C02EF09B4D00D76218 /* TripsTimeline.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -94,7 +94,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 02AC92BB2EF09B4D00D76218 /* Build configuration list for PBXProject "Trips Timeline" */;
+			buildConfigurationList = 02AC92BB2EF09B4D00D76218 /* Build configuration list for PBXProject "TripsTimeline" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -111,7 +111,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				02AC92BF2EF09B4D00D76218 /* Trips Timeline */,
+				02AC92BF2EF09B4D00D76218 /* TripsTimeline */,
 			);
 		};
 /* End PBXProject section */
@@ -281,7 +281,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.Bryceco.Trips-Timeline";
+				PRODUCT_BUNDLE_IDENTIFIER = com.Bryceco.TripsTimeline;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -314,7 +314,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.Bryceco.Trips-Timeline";
+				PRODUCT_BUNDLE_IDENTIFIER = com.Bryceco.TripsTimeline;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -329,7 +329,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		02AC92BB2EF09B4D00D76218 /* Build configuration list for PBXProject "Trips Timeline" */ = {
+		02AC92BB2EF09B4D00D76218 /* Build configuration list for PBXProject "TripsTimeline" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				02AC92C92EF09B4E00D76218 /* Debug */,
@@ -338,7 +338,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		02AC92CB2EF09B4E00D76218 /* Build configuration list for PBXNativeTarget "Trips Timeline" */ = {
+		02AC92CB2EF09B4E00D76218 /* Build configuration list for PBXNativeTarget "TripsTimeline" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				02AC92CC2EF09B4E00D76218 /* Debug */,
