@@ -14,7 +14,7 @@ struct MonthRow: View {
     let monthStart: Date
     let monthEnd: Date
     let trips: [Trip]       // stays touching this month
-    let allTrips: [Trip]    // every stay, for bridging gaps across month boundaries
+    let nearbyTrips: [Trip] // stays within bridging reach of this month, for gaps at its edges
     let onTripTapped: ((Trip) -> Void)?
     @ObservedObject var verdicts: PlaceVerdicts
 
@@ -27,7 +27,9 @@ struct MonthRow: View {
         self.monthStart = monthStart
         self.monthEnd = monthEnd
         self.trips = trips.filter { $0.startDate <= monthEnd && $0.endDate >= monthStart }
-        self.allTrips = trips
+        let reach = PhotoLibrary.maxJourneyGapDays * 86400
+        self.nearbyTrips = trips.filter { $0.startDate <= monthEnd.addingTimeInterval(reach)
+            && $0.endDate >= monthStart.addingTimeInterval(-reach) }
         self.verdicts = verdicts
         self.onTripTapped = onTripTapped
         self.daysInMonth = daysInMonth
@@ -161,7 +163,7 @@ struct MonthRow: View {
         if let trip = trips.first(where: { $0.startDate < dayEnd && $0.endDate >= date }) {
             return (trip, false)
         }
-        let shown = allTrips.filter { verdicts.verdict(for: $0.place) != false }
+        let shown = nearbyTrips.filter { verdicts.verdict(for: $0.place) != false }
         guard let before = shown.last(where: { $0.endDate < date }),
               let after = shown.first(where: { $0.startDate >= dayEnd }),
               after.startDate.timeIntervalSince(before.endDate) <= PhotoLibrary.maxJourneyGapDays * 86400
