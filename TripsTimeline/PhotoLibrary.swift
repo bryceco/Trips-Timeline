@@ -334,6 +334,28 @@ class PhotoLibrary {
     /// photo-less days between them belong to it.
     static let maxJourneyGapDays = 4.0
 
+    /// Photos taken from a plane: higher than any road, or moving faster than any car
+    /// relative to both neighbouring photos.
+    static let airborneAltitude = 6000.0   // metres
+    static let airborneSpeed = 250.0       // km/h
+
+    static func isAirborne(_ list: [(date: Date, location: CLLocation, asset: PHAsset)], at i: Int) -> Bool {
+        let here = list[i]
+        if here.location.verticalAccuracy >= 0, here.location.altitude > airborneAltitude {
+            return true
+        }
+        func speed(to j: Int) -> Double? {
+            guard list.indices.contains(j) else { return nil }
+            let hours = abs(list[j].date.timeIntervalSince(here.date)) / 3600
+            let km = list[j].location.distance(from: here.location) / 1000
+            return km < 20 ? 0 : km / max(hours, 1.0 / 60)  // ignore short hops; cap tiny intervals
+        }
+        if let before = speed(to: i - 1), let after = speed(to: i + 1) {
+            return before > airborneSpeed && after > airborneSpeed
+        }
+        return false
+    }
+
     let dateFormatter = {
         let format = DateFormatter()
         format.dateFormat = "yyyy-MM-dd"
@@ -387,7 +409,10 @@ class PhotoLibrary {
         store.save()
 
         // Consecutive photos at the same place form a stay; a few photo-less days don't end it.
-        for entry in photoListValid {
+        for (i, entry) in photoListValid.enumerated() {
+            if Self.isAirborne(photoListValid, at: i) {
+                continue
+            }
             guard let place = await placeName(for: entry.location) else {
                 continue
             }
