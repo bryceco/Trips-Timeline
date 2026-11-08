@@ -14,127 +14,147 @@ struct MonthRow: View {
     let monthStart: Date
     let monthEnd: Date
     let trips: [Trip]
-    let cityColors: [String: Color]
-    let countryColors: [String: Color]
     let onTripTapped: ((Trip) -> Void)?
+    @ObservedObject var verdicts: PlaceVerdicts
 
-    // computed stuff
-    let homeColor = Color.gray.opacity(0.2)
     private let daysInMonth: Int
-    private var monthText: String
 
-    init(monthStart: Date, trips: [Trip], cityColors: [String: Color], countryColors: [String: Color], onTripTapped: ((Trip) -> Void)?) {
+    init(monthStart: Date, trips: [Trip], verdicts: PlaceVerdicts, onTripTapped: ((Trip) -> Void)?) {
         let daysInMonth = Calendar.current.range(of: .day, in: .month, for: monthStart)?.count ?? 30
         let monthEnd = monthStart.addingTimeInterval(TimeInterval(daysInMonth * 24 * 60 * 60))
-        let monthTrips = trips.filter { $0.startDate <= monthEnd && $0.endDate >= monthStart }
 
         self.monthStart = monthStart
         self.monthEnd = monthEnd
-        self.trips = monthTrips
-        self.cityColors = cityColors
-        self.countryColors = countryColors
+        self.trips = trips.filter { $0.startDate <= monthEnd && $0.endDate >= monthStart }
+        self.verdicts = verdicts
         self.onTripTapped = onTripTapped
-
         self.daysInMonth = daysInMonth
+    }
 
-        monthText = {
-            let countries = monthTrips.map { $0.place.country }.uniqueInOrder()
-            let states = monthTrips.map { $0.place.state }.uniqueInOrder()
-            let cities = monthTrips.map { $0.place.city }.uniqueInOrder()
-
-            if countries.count > 1 {
-                return countries.joined(separator: ", ")
-            }
-            if countries.count == 1 {
-                if cities.count > 5 {
-                    return "\(countries.first!): \(states.joined(separator: ", "))"
-                }
-                return "\(countries.first!): \(cities.joined(separator: ", "))"
-            }
-            return ""
-        }()
+    /// Trips the user hasn't ruled out, in date order.
+    private var shownTrips: [Trip] {
+        trips.filter { verdicts.verdict(for: $0.place) != false }
     }
 
     private var monthLabel: String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "yy MMM" // e.g. Jan 2025
+        formatter.dateFormat = "yy MMM"
         return formatter.string(from: monthStart)
     }
 
+    /// e.g. "🇫🇷 Paris, Lyon · 🇪🇸 Barcelona?" — a "?" marks a place awaiting a verdict.
+    private var monthText: String {
+        var byCountry: [(flag: String, cities: [String])] = []
+        for trip in shownTrips {
+            let city = trip.place.city + (verdicts.verdict(for: trip.place) == nil ? "?" : "")
+            if let last = byCountry.last, last.flag == trip.place.flag {
+                if !byCountry[byCountry.count - 1].cities.contains(city) {
+                    byCountry[byCountry.count - 1].cities.append(city)
+                }
+            } else {
+                byCountry.append((trip.place.flag, [city]))
+            }
+        }
+        return byCountry.map { "\($0.flag) " + $0.cities.prefix(4).joined(separator: ", ") + ($0.cities.count > 4 ? "…" : "") }
+            .joined(separator: " · ")
+    }
+
     var body: some View {
-        VStack {
+        VStack(spacing: 2) {
             HStack(spacing: 8) {
                 Text(monthLabel)
                     .font(.caption)
                     .frame(width: 50, alignment: .leading)
 
                 GeometryReader { geo in
-                    let totalWidth = geo.size.width
-                    let horizontalPadding: CGFloat = 0
-                    let dayWidth = (totalWidth - horizontalPadding * 2) / CGFloat(daysInMonth)
-
-                    HStack(spacing: 0) {
-                        ForEach(1 ... daysInMonth, id: \.self) { day in
-                            let dayDate = Calendar.current.date(bySetting: .day, value: day, of: monthStart)!
-                            let tripColors = colorsForDay(dayDate)
-
-                            VStack(spacing: 0) {
+                    let dayWidth = geo.size.width / CGFloat(daysInMonth)
+                    ZStack(alignment: .topLeading) {
+                        HStack(spacing: 0) {
+                            ForEach(1 ... daysInMonth, id: \.self) { day in
+                                let dayDate = Calendar.current.date(bySetting: .day, value: day, of: monthStart)!
+                                let trip = tripForDay(dayDate)
                                 Rectangle()
-                                    .fill(tripColors?.0 ?? homeColor)
-                                    .frame(width: dayWidth, height: 20)
-                                Rectangle()
-                                    .fill(tripColors?.1 ?? homeColor)
-                                    .frame(width: dayWidth, height: 20)
+                                    .fill(fill(for: trip))
+                                    .frame(width: dayWidth, height: 28)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        if let trip { onTripTapped?(trip) }
+                                    }
+                                    .contextMenu {
+                                        if let trip { verdictMenu(for: trip) }
+                                    }
                             }
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                guard let trip = tripForDay(dayDate) else { return }
-                                onTripTapped?(trip)
+                        }
+                        // One flag per stay, centered over its days in this month.
+                        ForEach(shownTrips) { trip in
+                            let (first, last) = dayRange(of: trip)
+                            let width = CGFloat(last - first + 1) * dayWidth
+                            if width >= 18 {
+                                Text(trip.place.flag)
+                                    .font(.system(size: min(18, width * 0.9)))
+                                    .frame(width: width, height: 28)
+                                    .offset(x: CGFloat(first - 1) * dayWidth)
+                                    .allowsHitTesting(false)
                             }
                         }
                     }
                 }
-                .frame(height: 40)
+                .frame(height: 28)
             }
             .padding(.horizontal, 5)
-            Text(monthText)
-                .font(.caption)
+            if !monthText.isEmpty {
+                Text(monthText)
+                    .font(.caption)
+                    .lineLimit(2)
+            }
         }
     }
 
-    private func intervalsOverlap(start1: Date,
-                                  end1: Date,
-                                  start2: Date,
-                                  end2: Date) -> Bool
-    {
-        return start1 <= end2 && start2 <= end1
+    @ViewBuilder
+    private func verdictMenu(for trip: Trip) -> some View {
+        let place = trip.place
+        Text("\(place.flag) \(place.city), \(place.state)")
+        Button("\(place.city) is a trip destination", systemImage: "checkmark") {
+            verdicts.set(place, isTrip: true)
+        }
+        Button("\(place.city) is not a trip (home, errands…)", systemImage: "house") {
+            verdicts.set(place, isTrip: false)
+        }
+        Divider()
+        Button("All of \(place.country) is trips", systemImage: "checkmark.circle") {
+            verdicts.set(country: place.country, isTrip: true)
+        }
+        Button("All of \(place.country) is not trips", systemImage: "house.circle") {
+            verdicts.set(country: place.country, isTrip: false)
+        }
+        if verdicts.verdict(for: place) != nil {
+            Divider()
+            Button("Forget verdict for \(place.city)", systemImage: "questionmark") {
+                verdicts.set(place, isTrip: nil)
+            }
+        }
+    }
+
+    private func fill(for trip: Trip?) -> Color {
+        guard let trip else { return Color.gray.opacity(0.15) }
+        switch verdicts.verdict(for: trip.place) {
+        case true: return Color.accentColor.opacity(0.35)
+        case false: return Color.gray.opacity(0.15)
+        default: return Color.yellow.opacity(0.35) // awaiting a verdict
+        }
+    }
+
+    /// First and last day-of-month this trip covers.
+    private func dayRange(of trip: Trip) -> (Int, Int) {
+        let cal = Calendar.current
+        let first = trip.startDate < monthStart ? 1 : cal.component(.day, from: trip.startDate)
+        let last = trip.endDate >= monthEnd ? daysInMonth : cal.component(.day, from: trip.endDate)
+        return (first, max(first, last))
     }
 
     private func tripForDay(_ date: Date) -> Trip? {
-        for trip in trips {
-            if intervalsOverlap(start1: date,
-                                end1: date.addingTimeInterval(24 * 60 * 60),
-                                start2: trip.startDate,
-                                end2: trip.endDate)
-            {
-                return trip
-            }
-        }
-        return nil
-    }
-
-    private func colorsForDay(_ date: Date) -> (Color, Color)? {
-        guard
-            let trip = tripForDay(date)
-        else {
-            return nil
-        }
-        let city = cityColors[trip.place.city]!
-        let country = countryColors[trip.place.country]!
-
-        // return (city, country)
-        _ = city
-        return (country, country)
+        let dayEnd = date.addingTimeInterval(24 * 60 * 60)
+        return trips.first { $0.startDate < dayEnd && $0.endDate >= date }
     }
 }
 
@@ -144,11 +164,10 @@ struct MonthScrollView: View {
     let startDate: Date
     let numberOfMonths: Int
     let trips: [Trip]
-    let cityColors: [String: Color]
-    let countryColors: [String: Color]
+    @ObservedObject var verdicts: PlaceVerdicts
     let onTripTapped: ((Trip) -> Void)?
 
-    init(trips: [Trip], onTripTapped: ((Trip) -> Void)?) {
+    init(trips: [Trip], verdicts: PlaceVerdicts, onTripTapped: ((Trip) -> Void)?) {
         // start date should be midnight on first day of the month
         let components = Calendar.current.dateComponents([.year, .month],
                                                          from: trips.first?.startDate ?? Date())
@@ -160,27 +179,7 @@ struct MonthScrollView: View {
         startDate = monthStart
         self.numberOfMonths = numberOfMonths + 1
         self.trips = trips
-
-        // Compute tripColors
-        var cityColors = [String: Color]()
-        var countryColors = [String: Color]()
-
-        let palette: [Color] = [.red, .blue, .green, .orange, .purple, .pink, .teal]
-        var countryIndex = 0
-        var cityIndex = 0
-
-        for trip in trips {
-            if countryColors[trip.place.country] == nil {
-                countryColors[trip.place.country] = palette[countryIndex % palette.count]
-                cityIndex = countryIndex
-                countryIndex += 1
-            }
-            if cityColors[trip.place.city] == nil {
-                cityColors[trip.place.city] = palette[cityIndex % palette.count]
-            }
-        }
-        self.countryColors = countryColors
-        self.cityColors = cityColors
+        self.verdicts = verdicts
         self.onTripTapped = onTripTapped
     }
 
@@ -191,8 +190,7 @@ struct MonthScrollView: View {
                     let monthDate = Calendar.current.date(byAdding: .month, value: monthOffset, to: startDate)!
                     MonthRow(monthStart: monthDate,
                              trips: trips,
-                             cityColors: cityColors,
-                             countryColors: countryColors,
+                             verdicts: verdicts,
                              onTripTapped: onTripTapped)
                 }
             }

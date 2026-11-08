@@ -7,20 +7,128 @@
 
 import Photos
 import SwiftReverseGeoCode
+import Combine
 
-struct Place: Equatable {
+struct Place: Equatable, Hashable, Codable {
     let city: String
     let state: String
     let country: String
+
+    /// Key used for storing the user's verdict on this place.
+    var key: String { "\(city)|\(state)|\(country)" }
+
+    var flag: String { Flags.flag(forCountry: country) }
 }
 
 struct Trip: Identifiable {
-    let id = UUID()
     let startDate: Date
     var endDate: Date
     let location: CLLocation
     let place: Place
     var photos: [String] = []
+
+    /// Stable across runs, so selection and sheets survive a reload.
+    var id: String { "\(place.key)@\(startDate.timeIntervalSinceReferenceDate)" }
+}
+
+/// Country flag emoji, found by matching the geocoder's country name against the
+/// system's English region names.
+enum Flags {
+    private static let codes: [String: String] = {
+        let english = Locale(identifier: "en_US")
+        var codes: [String: String] = [:]
+        for region in Locale.Region.isoRegions where region.identifier.count == 2 {
+            if let name = english.localizedString(forRegionCode: region.identifier) {
+                codes[name] = region.identifier
+            }
+        }
+        // Names the geocoder uses that differ from the system's
+        for (name, code) in ["The Netherlands": "NL", "Turkey": "TR", "Vatican": "VA", "Macao": "MO",
+                             "Bonaire, Saint Eustatius and Saba": "BQ", "Czech Republic": "CZ",
+                             "Russia": "RU", "South Korea": "KR", "Vietnam": "VN", "Laos": "LA",
+                             "Iran": "IR", "Syria": "SY", "Bolivia": "BO", "Venezuela": "VE",
+                             "Tanzania": "TZ", "Moldova": "MD", "Brunei": "BN", "Micronesia": "FM"]
+        {
+            codes[name] = code
+        }
+        return codes
+    }()
+
+    static func flag(forCountry name: String) -> String {
+        guard let code = codes[name] else { return "🏳️" }
+        return String(code.unicodeScalars.map { Character(UnicodeScalar(0x1F1E6 + $0.value - 65)!) })
+    }
+}
+
+/// What the user has said about a place: a real trip destination, or not (home, errands,
+/// someone else's photo). Unknown places are shown for review.
+@MainActor
+final class PlaceVerdicts: ObservableObject {
+    @Published private(set) var verdicts: [String: Bool]
+
+    private static var fileURL: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("PlaceVerdicts.json")
+    }
+
+    init() {
+        verdicts = (try? JSONDecoder().decode([String: Bool].self, from: Data(contentsOf: Self.fileURL))) ?? [:]
+    }
+
+    /// The place's own verdict, else the whole country's, else nil.
+    func verdict(for place: Place) -> Bool? {
+        verdicts[place.key] ?? verdicts["||" + place.country]
+    }
+
+    func set(_ place: Place, isTrip: Bool?) {
+        verdicts[place.key] = isTrip
+        save()
+    }
+
+    func set(country: String, isTrip: Bool?) {
+        verdicts["||" + country] = isTrip
+        save()
+    }
+
+    private func save() {
+        try? JSONEncoder().encode(verdicts).write(to: Self.fileURL, options: .atomic)
+    }
+}
+
+/// Reverse-geocoding results, keyed by coordinate rounded to about 100 m.
+final class PlaceStore {
+    private var store: [String: Place]
+    private var dirty = 0
+
+    private static var fileURL: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("PlaceStore.json")
+    }
+
+    init() {
+        store = (try? JSONDecoder().decode([String: Place].self, from: Data(contentsOf: Self.fileURL))) ?? [:]
+    }
+
+    private static func key(_ location: CLLocation) -> String {
+        "\(Int((location.coordinate.latitude * 1000).rounded())),\(Int((location.coordinate.longitude * 1000).rounded()))"
+    }
+
+    func place(for location: CLLocation) -> Place? {
+        store[Self.key(location)]
+    }
+
+    func add(_ place: Place, for location: CLLocation) {
+        store[Self.key(location)] = place
+        dirty += 1
+        if dirty >= 5000 {
+            save()
+        }
+    }
+
+    func save() {
+        dirty = 0
+        try? JSONEncoder().encode(store).write(to: Self.fileURL, options: .atomic)
+    }
 }
 
 func photoName(for asset: PHAsset) async -> String? {
@@ -200,17 +308,27 @@ class PhotoLibrary {
         fatalError()
     }()
 
+    let places = PlaceStore()
+
     func placeName(for location: CLLocation) async -> Place? {
+        if let cached = places.place(for: location) {
+            return cached
+        }
         do {
             let loc = try reverseService.reverseGeoCode(latitude: location.coordinate.latitude,
                                                         longitude: location.coordinate.longitude)
-            return Place(city: loc.name,
-                         state: loc.adminName,
-                         country: loc.countryName)
+            let place = Place(city: loc.name,
+                              state: loc.adminName,
+                              country: loc.countryName)
+            places.add(place, for: location)
+            return place
         } catch {
             return nil
         }
     }
+
+    /// Days without photos inside a stay at one place are still part of the stay.
+    static let maxGapDays = 3.0
 
     let dateFormatter = {
         let format = DateFormatter()
@@ -229,47 +347,6 @@ class PhotoLibrary {
         let store = ImageStore()
         let photoListAll = await photoLibraryMetadata().sorted { $0.date < $1.date }
         var trips: [Trip] = []
-
-        let whiteList = [
-            "Aruba",
-            "Austria",
-            "Belgium",
-            "Bonaire, Saint Eustatius and Saba",
-            "Canada",
-            "Costa Rica",
-            "Cyprus",
-            "Czechia",
-            "Dominica",
-            "France",
-            "Germany",
-            "Gibraltar",
-            "Grenada",
-            "Hong Kong",
-            "Hungary",
-            "Iceland",
-            "Ireland",
-            "Italy",
-            "Japan",
-            "Kenya",
-            "Macao",
-            "Mexico",
-            "Netherlands",
-            "Portugal",
-            "Puerto Rico",
-            "Singapore",
-            "South Africa",
-            "Spain",
-            "Switzerland",
-            "Tanzania",
-            "Taiwan",
-            "The Netherlands",
-            "Turkey",
-            "United Arab Emirates",
-            "United Kingdom",
-            "United States",
-            "Vatican",
-            "Zimbabwe",
-        ]
 
         var lastDate = Date()
         var photoListValid: [(date: Date, location: CLLocation, asset: PHAsset)] = []
@@ -305,22 +382,15 @@ class PhotoLibrary {
         }
         store.save()
 
+        // Consecutive photos at the same place form a stay; a few photo-less days don't end it.
         for entry in photoListValid {
             guard let place = await placeName(for: entry.location) else {
                 continue
             }
 
-            guard
-                whiteList.contains(place.country)
-            else {
-                let name = await photoName(for: entry.asset) ?? ""
-                let date = entry.asset.creationDate
-                print("Not whitelisted: \(entry.asset.pixelWidth) x \(entry.asset.pixelHeight) - \(place.country),\(place.city) - \(name) - \(date ?? Date())")
-                continue
-            }
-
             if let lastTrip = trips.last,
-               lastTrip.place == place
+               lastTrip.place == place,
+               entry.date.timeIntervalSince(lastTrip.endDate) <= Self.maxGapDays * 86400
             {
                 trips[trips.count - 1].endDate = entry.date
                 trips[trips.count - 1].photos.append(entry.asset.localIdentifier)
@@ -333,24 +403,7 @@ class PhotoLibrary {
             }
         }
 
-        #if false
-            for trip in trips {
-                let d1 = formatDateShort(trip.startDate)
-                let d2 = formatDateShort(trip.endDate)
-                print("\(d1)...\(d2): \(trip.locationName) (\(trip.photos.count)) - \(trip.location.altitude)")
-            }
-        #endif
-
-        return trips.filter {
-            switch ($0.place.country, $0.place.state) {
-            case ("United States", "Washington"):
-                return false
-            case ("China", _):
-                print($0.place.state)
-                return false
-            default:
-                return true
-            }
-        }
+        places.save()
+        return trips
     }
 }

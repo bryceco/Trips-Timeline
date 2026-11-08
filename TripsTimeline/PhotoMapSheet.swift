@@ -10,6 +10,7 @@ import SwiftUI
 
 struct PhotoMapSheet: View {
     let identifiers: [String]
+    var title = "Photo Map"
     @Environment(\.dismiss) private var dismiss
     @State private var selectedAsset: PHAsset?
 
@@ -21,7 +22,7 @@ struct PhotoMapSheet: View {
                              selectedAsset = asset
                          })
                          .edgesIgnoringSafeArea(.all)
-                         .navigationTitle("Photo Map")
+                         .navigationTitle(title)
                          .navigationBarTitleDisplayMode(.inline)
                          .toolbar {
                              ToolbarItem(placement: .cancellationAction) {
@@ -30,8 +31,15 @@ struct PhotoMapSheet: View {
                                  }
                              }
                          }
-                         .sheet(item: $selectedAsset) {
-                             asset in PhotoAssetView(asset: asset)
+                         .sheet(item: $selectedAsset) { asset in
+                             NavigationStack {
+                                 PhotoAssetView(asset: asset)
+                                     .toolbar {
+                                         ToolbarItem(placement: .cancellationAction) {
+                                             Button("Done") { selectedAsset = nil }
+                                         }
+                                     }
+                             }
                          }
         }
     }
