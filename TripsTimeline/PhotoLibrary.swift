@@ -330,6 +330,10 @@ class PhotoLibrary {
     /// Days without photos inside a stay at one place are still part of the stay.
     static let maxGapDays = 3.0
 
+    /// Stays this close together (between different places) are one journey, and the
+    /// photo-less days between them belong to it.
+    static let maxJourneyGapDays = 4.0
+
     let dateFormatter = {
         let format = DateFormatter()
         format.dateFormat = "yyyy-MM-dd"

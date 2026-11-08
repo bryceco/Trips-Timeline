@@ -13,7 +13,8 @@ import SwiftUI
 struct MonthRow: View {
     let monthStart: Date
     let monthEnd: Date
-    let trips: [Trip]
+    let trips: [Trip]       // stays touching this month
+    let allTrips: [Trip]    // every stay, for bridging gaps across month boundaries
     let onTripTapped: ((Trip) -> Void)?
     @ObservedObject var verdicts: PlaceVerdicts
 
@@ -26,6 +27,7 @@ struct MonthRow: View {
         self.monthStart = monthStart
         self.monthEnd = monthEnd
         self.trips = trips.filter { $0.startDate <= monthEnd && $0.endDate >= monthStart }
+        self.allTrips = trips
         self.verdicts = verdicts
         self.onTripTapped = onTripTapped
         self.daysInMonth = daysInMonth
@@ -72,9 +74,9 @@ struct MonthRow: View {
                         HStack(spacing: 0) {
                             ForEach(1 ... daysInMonth, id: \.self) { day in
                                 let dayDate = Calendar.current.date(bySetting: .day, value: day, of: monthStart)!
-                                let trip = tripForDay(dayDate)
+                                let (trip, bridged) = tripForDay(dayDate)
                                 Rectangle()
-                                    .fill(fill(for: trip))
+                                    .fill(fill(for: trip).opacity(bridged ? 0.5 : 1))
                                     .frame(width: dayWidth, height: 28)
                                     .contentShape(Rectangle())
                                     .onTapGesture {
@@ -152,9 +154,19 @@ struct MonthRow: View {
         return (first, max(first, last))
     }
 
-    private func tripForDay(_ date: Date) -> Trip? {
+    /// The stay covering this day, or, for a photo-less day between two stays of the same
+    /// journey, the stay before it (flagged as bridged).
+    private func tripForDay(_ date: Date) -> (Trip?, bridged: Bool) {
         let dayEnd = date.addingTimeInterval(24 * 60 * 60)
-        return trips.first { $0.startDate < dayEnd && $0.endDate >= date }
+        if let trip = trips.first(where: { $0.startDate < dayEnd && $0.endDate >= date }) {
+            return (trip, false)
+        }
+        let shown = allTrips.filter { verdicts.verdict(for: $0.place) != false }
+        guard let before = shown.last(where: { $0.endDate < date }),
+              let after = shown.first(where: { $0.startDate >= dayEnd }),
+              after.startDate.timeIntervalSince(before.endDate) <= PhotoLibrary.maxJourneyGapDays * 86400
+        else { return (nil, false) }
+        return (before, true)
     }
 }
 
